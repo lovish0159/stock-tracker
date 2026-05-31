@@ -36,6 +36,7 @@ def get_sector_performance():
                     "Sector": name, 
                     "5-Day Performance (%)": float(round(pct_change, 2))
                 })
+                return pd.DataFrame(data_list)
         except Exception:
             continue
             
