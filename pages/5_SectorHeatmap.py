@@ -52,8 +52,18 @@ if st.button("🌡️ SCAN SECTOR HEATMAP"):
             df = df.sort_values(by="5-Day Performance (%)", ascending=False)
             
             # Display
-            st.dataframe(df.style.background_gradient(subset=["5-Day Performance (%)"], cmap="RdYlGn"), 
-                         use_container_width=True, hide_index=True)
+            # Purane wale st.dataframe ko hatakar yeh use karein:
+st.dataframe(
+    df,
+    column_config={
+        "5-Day Performance (%)": st.column_config.NumberColumn(
+            "5-Day Performance (%)",
+            format="%.2f%%"
+        )
+    },
+    use_container_width=True,
+    hide_index=True
+)
             
             # Telegram Alert
             top_sector = df.iloc[0]
