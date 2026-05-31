@@ -36,12 +36,18 @@ if st.button("🌡️ SCAN SECTOR HEATMAP"):
     with st.spinner("Analyzing Sector Money Flow..."):
         df = get_sector_performance()
         
-        # 🟢 YAHAN FIX KIYA HAI:
-        # Sort karne se pehle index ko reset karna zaroori hai
-        df = df.reset_index(drop=True) 
-        
-        # Ab sort_values fail nahi hoga
+        # 🟢 YAHAN FIX KIYA HAI (3-Step Cleaning):
+        # 1. Reset index taaki labels clean ho jayein
+        # 2. DataFrame ki copy banayein taaki koi reference error na ho
+        # 3. Sort karein
+        df = df.reset_index(drop=True).copy()
         df = df.sort_values(by="5-Day Performance (%)", ascending=False)
+        
+        # Heatmap display
+        st.dataframe(df.style.background_gradient(subset=["5-Day Performance (%)"], cmap="RdYlGn"), 
+                     use_container_width=True, hide_index=True)
+        
+        # ... baki ka code waisa hi rehne dein
         
         # Heatmap display
         st.dataframe(df.style.background_gradient(subset=["5-Day Performance (%)"], cmap="RdYlGn"), 
