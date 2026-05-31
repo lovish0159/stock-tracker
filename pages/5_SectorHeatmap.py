@@ -45,37 +45,25 @@ def get_sector_performance():
 # ... (upar ka code waisa hi rehne dein)
 
 if st.button("🌡️ SCAN SECTOR HEATMAP"):
+    witif st.button("🌡️ SCAN SECTOR HEATMAP"):
     with st.spinner("Analyzing Sector Money Flow..."):
         df = get_sector_performance()
         
-        # 1. Index reset karein taaki table clean ho
-        df = df.reset_index(drop=True)
+        # 🟢 Yahan check karein ki DataFrame khali toh nahi hai
+        if df.empty:
+            st.error("Data fetch nahi hua! Tickers ya YFinance connection check karein.")
         
-        # 2. BULLETPROOF NUMERIC CONVERSION
-        # errors='coerce' ka matlab hai: agar koi value number nahi hai, toh use NaN bana do
-        df["5-Day Performance (%)"] = pd.to_numeric(df["5-Day Performance (%)"], errors='coerce')
-        
-        # 3. Sirf wahi rows rakhein jo valid numbers hain (NaN hatayein)
-        df = df.dropna(subset=["5-Day Performance (%)"])
-        
-        # 4. Ab sort karein
-        df = df.sort_values(by="5-Day Performance (%)", ascending=False)
-        
-        # Display the result
-        if not df.empty:
+        # 🟢 Check karein ki column naam sahi hai ya nahi
+        elif "5-Day Performance (%)" not in df.columns:
+            st.error(f"Column nahi mila! Column names ye hain: {df.columns.tolist()}")
+            
+        else:
+            # Ab code safely chalega
+            df = df.reset_index(drop=True)
+            df = df.sort_values(by="5-Day Performance (%)", ascending=False)
+            
+            # Display
             st.dataframe(df.style.background_gradient(subset=["5-Day Performance (%)"], cmap="RdYlGn"), 
                          use_container_width=True, hide_index=True)
             
-            # Telegram Alert Logic
-            top_sector = df.iloc[0]
-            if top_sector['5-Day Performance (%)'] > 0:
-                msg = f"🌡️ **SECTOR HOTSPOT**: {top_sector['Sector']} is strong ({top_sector['5-Day Performance (%)']:.2f}%)"
-                st.success(msg)
-                
-                if top_sector['5-Day Performance (%)'] > 3.0:
-                    BOT_TOKEN = st.secrets["TELEGRAM_BOT_TOKEN"]
-                    CHAT_ID = "299717233"
-                    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", 
-                                  json={"chat_id": CHAT_ID, "text": f"🔥 {msg} - Check stocks now!"})
-        else:
-            st.warning("Data fetch hua lekin numeric format mein nahi mila. Check your yfinance connection.")
+            # Telegram Alert...
