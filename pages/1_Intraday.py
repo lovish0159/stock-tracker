@@ -10,8 +10,9 @@ from datetime import datetime
 # --- SECURE CREDENTIALS CONFIG ---
 BOT_TOKEN = st.secrets["TELEGRAM_BOT_TOKEN"]  
 CHAT_ID = "299717233"      
-# 💡 Gid part hata kar ekdum clean url set karein
+# Clean Short URL Standard applied
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1BHnQm0nYwl3paJ9PUEfHPlzMBLLXdpCZtdC59SFma58/edit"
+
 st.set_page_config(layout="wide")
 st.title("🛡️ Institutional Alpha Engine (Triple Confirmation)")
 st.subheader("SuperTrend + EMA Crossover + RSI + Volume Spread Scan")
@@ -25,7 +26,6 @@ def get_google_sheet():
         sheet = client.open_by_url(SHEET_URL).sheet1
         return sheet
     except Exception as e:
-        st.error(f"⚠️ Sheet Connection Error: {e}")
         return None
 
 # --- TELEGRAM ALERTS ENGINE ---
@@ -34,7 +34,7 @@ def send_telegram_alert(message):
         return
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     try: 
-        requests.post(url, json={"chat_id": CHAT_ID, "text": message}, timeout=15)
+        requests.post(url, json={"chat_id": CHAT_ID, "text": message}, timeout=10)
     except: 
         pass
 
@@ -81,16 +81,28 @@ def calculate_alpha_indicators(df):
 
 # --- CORE MULTI-SCANNER COMPILER ---
 def execute_alpha_scan():
+    symbols = []
+    using_fallback = False
+    
+    # Attempt Cloud Sheet read operation
     sheet = get_google_sheet()
-    if not sheet: 
-        return None, None
-    
-    records = sheet.get_all_records()
-    df_sheet = pd.DataFrame(records)
-    if df_sheet.empty or 'Symbol' not in df_sheet.columns: 
-        return None, None
-    
-    symbols = [str(s).strip() for s in df_sheet['Symbol'].dropna().tolist() if str(s).strip()]
+    if sheet:
+        try:
+            records = sheet.get_all_records()
+            df_sheet = pd.DataFrame(records)
+            
+            if not df_sheet.empty:
+                # Dynamic column parsing to avoid header bugs
+                df_sheet.columns = df_sheet.columns.str.strip().str.title()
+                if 'Symbol' in df_sheet.columns:
+                    symbols = [str(s).strip() for s in df_sheet['Symbol'].dropna().tolist() if str(s).strip()]
+        except Exception as e:
+            pass
+
+    # 🛑 FALLBACK MATRIX: If sheet fails or is empty, auto-inject core watchlist
+    if not symbols:
+        symbols = ["HAL", "ASALCBR", "MAZDOCK", "RELIANCE"]
+        using_fallback = True
     
     screen_results = []
     tele_reports = []
@@ -102,7 +114,6 @@ def execute_alpha_scan():
             if data.empty: 
                 continue
             
-            # MultiIndex Structure Flattening 
             clean_df = pd.DataFrame(index=data.index)
             if isinstance(data.columns, pd.MultiIndex):
                 clean_df['High'] = data['High'][formatted_sym]
@@ -129,7 +140,6 @@ def execute_alpha_scan():
                 
                 vol_mult = round(vol / v_avg, 1) if v_avg > 0 else 1.0
                 
-                # --- TRIPLE CONFIRMATION MATH LOGIC ---
                 ema_buy = (last['EMA_9'] > last['EMA_21']) and (prev['EMA_9'] <= prev['EMA_21'])
                 st_buy = (last['SuperTrend_Dir'] == 1)
                 rsi_buy = (50 <= rsi <= 68)
@@ -164,12 +174,12 @@ def execute_alpha_scan():
         except Exception as e:
             continue
             
-    return screen_results, tele_reports
+    return screen_results, tele_reports, using_fallback
 
 # ==========================================
 # SIDEBAR CONTROL & ON-DEMAND BUTTONS
 # ==========================================
-st.sidebar.header("🕹 " + "Command Center")
+st.sidebar.header("🕹️ Command Center")
 
 btn_scan = st.sidebar.button("🚀 RUN SCREEN MATRIX DISCOVERY", type="primary", use_container_width=True)
 btn_telegram = st.sidebar.button("📡 DISPATCH STRATA TO TELEGRAM", use_container_width=True)
@@ -177,8 +187,11 @@ btn_telegram = st.sidebar.button("📡 DISPATCH STRATA TO TELEGRAM", use_contain
 # --- ACTION TRIGGER: BUTTON 1 (LOCAL VIEW) ---
 if btn_scan:
     with st.spinner("Compiling Volatility and Structural Trend Arrays..."):
-        screen_results, _ = execute_alpha_scan()
+        screen_results, _, fallback_active = execute_alpha_scan()
         if screen_results:
+            if fallback_active:
+                st.info("💡 **Notice:** Google Sheet API data connection standby state par hai. Core fallback watchlist rendered.")
+            
             st.subheader(f"📊 Live Alpha Matrix Snapshot ({datetime.now().strftime('%H:%M:%S')})")
             res_df = pd.DataFrame(screen_results)
             
@@ -190,15 +203,18 @@ if btn_scan:
                 return ''
                 
             st.dataframe(res_df.style.map(style_trends, subset=['Trend Matrix']), use_container_width=True, hide_index=True)
-            st.success("✅ Local Screen matrix loaded. No messages sent to Telegram.")
+            st.success("✅ Discovery layout updated.")
         else:
-            st.warning("⚠️ Google sheet empty or API connection timed out.")
+            st.error("⚠️ Market data extraction timeout. Please check your internet connection or try again.")
 
 # --- ACTION TRIGGER: BUTTON 2 (TELEGRAM DELIVERY) ---
 if btn_telegram:
     with st.spinner("Broadcasting Alpha Signals to Telegram Channels..."):
-        screen_results, tele_reports = execute_alpha_scan()
+        screen_results, tele_reports, fallback_active = execute_alpha_scan()
         if screen_results:
+            if fallback_active:
+                st.info("💡 **Notice:** Executing broadcast sequence using local backup watchlist structures.")
+                
             st.subheader("📊 Live Broadcast Snapshot Matrix")
             st.dataframe(pd.DataFrame(screen_results), use_container_width=True, hide_index=True)
             
@@ -206,6 +222,6 @@ if btn_telegram:
                 send_telegram_alert("🛡️ **ACTIVE TRIPLE CONFIRMATION SCAN REPORT** 🛡️")
                 for rep in tele_reports:
                     send_telegram_alert(rep)
-                st.success(f"✅ Dispatched! {len(tele_reports)} breakout signals sent to Telegram.")
+                st.success(f"✅ Dispatched! {len(tele_reports)} breakouts sent to Telegram.")
             else:
                 st.info("⚠️ Scan complete. No active mathematical triple crossovers (BUY/SHORT) found on this candle.")
