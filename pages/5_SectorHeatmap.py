@@ -13,18 +13,16 @@ sectors = {
 
 def get_sector_performance():
     data_list = []
-    # NSE ke liye tickers mein '^' zaroori hai, par kabhi kabhi yfinance
-    # server side par request block karta hai. Hum yahan small timeout try karenge.
     for name, ticker in sectors.items():
         try:
-            # auto_adjust=True se price data saaf milta hai
+            # Data download karein
             hist = yf.download(ticker, period="5d", progress=False, auto_adjust=True)
             
-            # Agar hist mein multiple columns hain, toh 'Close' ko nikalna padega
             if not hist.empty:
-                # hist['Close'] ek Series ho sakta hai, usse value nikalein
-                curr_price = float(hist['Close'].iloc[-1])
-                prev_price = float(hist['Close'].iloc[0])
+                # 🟢 FIX: 'Close' column ek Series hai, humein uski specific value chahiye
+                # .iloc[-1] ek series return kar sakta hai, isliye hum [0] index use karenge
+                curr_price = float(hist['Close'].iloc[-1].item()) 
+                prev_price = float(hist['Close'].iloc[0].item())
                 
                 pct_change = ((curr_price - prev_price) / prev_price) * 100
                 
@@ -33,8 +31,10 @@ def get_sector_performance():
                     "5-Day Performance (%)": float(round(pct_change, 2))
                 })
         except Exception as e:
-            st.write(f"Error fetching {name}: {e}")
+            # Agar error aaye toh screen par dikh jayega
+            st.warning(f"Error fetching {name}: {e}")
             continue
+            
     return pd.DataFrame(data_list)
 
 # Main UI
