@@ -1,73 +1,105 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
 import requests
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import xml.etree.ElementTree as ET
+import urllib.parse
+import time
 
-# Sector Tickers (Ensure these are correct)
-sectors = {
-    "Nifty Bank": "^NSEBANK",
-    "Nifty IT": "^CNXIT",
-    "Nifty Pharma": "^CNXPHARMA",
-    "Nifty Auto": "^CNXAUTO"
-}
+# --- CONFIGURATION (Streamlit Secrets) ---
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1BHnQm0nYwl3paJ9PUEfHPlzMBLLXdpCZtdC59SFma58/edit?gid=0#gid=0"
 
-def get_sector_performance():
-    data_list = []
-    for name, ticker in sectors.items():
-        try:
-            # Data download karein
-            hist = yf.download(ticker, period="5d", progress=False, auto_adjust=True)
-            
-            if not hist.empty:
-                # 🟢 FIX: 'Close' column ek Series hai, humein uski specific value chahiye
-                # .iloc[-1] ek series return kar sakta hai, isliye hum [0] index use karenge
-                curr_price = float(hist['Close'].iloc[-1].item()) 
-                prev_price = float(hist['Close'].iloc[0].item())
+st.set_page_config(layout="wide")
+st.title("📰 Institutional Earnings & Quarter News Radar")
+st.subheader("Google Sheet Watchlist Live Results Sentiment Engine")
+
+if "news_scan" not in st.session_state:
+    st.session_state.news_scan = False
+
+# --- GOOGLE SHEETS CONNECTION ---
+def get_google_sheet():
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    try:
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_url(SHEET_URL).sheet1
+        return sheet
+    except Exception as e:
+        st.error(f"⚠️ Sheet Connection Error: {e}")
+        return None
+
+# --- GOOGLE NEWS EARNINGS FETCH ENGINE ---
+def fetch_quarter_news(stock_name):
+    search_query = f"{stock_name} (quarterly results OR earnings OR Q1 OR Q2 OR Q3 OR Q4)"
+    encoded_query = urllib.parse.quote(search_query)
+    
+    url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-IN&gl=IN&ceid=IN:en"
+    
+    news_list = []
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            root = ET.fromstring(response.content)
+            for item in root.findall('.//item')[:3]:
+                title = item.find('title').text
+                link = item.find('link').text
+                pub_date = item.find('pubDate').text
                 
-                pct_change = ((curr_price - prev_price) / prev_price) * 100
-                
-                data_list.append({
-                    "Sector": name,
-                    "5-Day Performance (%)": float(round(pct_change, 2))
-                })
-        except Exception as e:
-            # Agar error aaye toh screen par dikh jayega
-            st.warning(f"Error fetching {name}: {e}")
-            continue
-            
-    return pd.DataFrame(data_list)
+                keywords = ['result', 'earning', 'profit', 'loss', 'revenue', 'quarter', 'q1', 'q2', 'q3', 'q4', 'margin']
+                if any(kw in title.lower() for kw in keywords):
+                    news_list.append({"title": title, "link": link, "date": pub_date})
+    except Exception as e:
+        pass
+    return news_list
 
-# Main UI
-st.title("🌡️ Sector Heatmap")
-
-if st.button("🌡️ SCAN SECTOR HEATMAP"):
-    with st.spinner("Analyzing Sector Money Flow..."):
-        df = get_sector_performance()
+# --- CORE NEWS SCANNER LOGIC ---
+def run_news_radar():
+    sheet = get_google_sheet()
+    if not sheet: 
+        return
+    
+    records = sheet.get_all_records()
+    df_sheet = pd.DataFrame(records)
+    if df_sheet.empty or 'Symbol' not in df_sheet.columns: 
+        return
+    
+    symbols = [str(s).split('.')[0].strip() for s in df_sheet['Symbol'].dropna().tolist() if str(s).strip()]
+    
+    st.markdown("### 🎯 Live Watchlist Headlines")
+    
+    for sym in symbols:
+        news_found = fetch_quarter_news(sym)
         
-        if df.empty:
-            st.error("Data fetch nahi hua! Tickers check karein.")
+        if news_found:
+            with st.expander(f"🟢 **{sym}** - New Headlines Found! ({len(news_found)})", expanded=True):
+                for idx, news in enumerate(news_found):
+                    st.markdown(f"**{idx+1}. {news['title']}**")
+                    st.caption(f"📅 {news['date'][:16]}")
+                    st.markdown(f"🔗 [Read Full Article]({news['link']})")
+                    if idx < len(news_found) - 1:
+                        st.divider()
+            time.sleep(1)
         else:
-            # Clean data
-            df = df.reset_index(drop=True)
-            df = df.sort_values(by="5-Day Performance (%)", ascending=False)
-            
-            # Display
-            # Purane wale st.dataframe ko hatakar yeh use karein:
-st.dataframe(
-    df,
-    column_config={
-        "5-Day Performance (%)": st.column_config.NumberColumn(
-            "5-Day Performance (%)",
-            format="%.2f%%"
-        )
-    },
-    use_container_width=True,
-    hide_index=True
-)
-            
-            # Telegram Alert
-            top_sector = df.iloc[0]
-            if top_sector['5-Day Performance (%)'] > 0:
-                msg = f"🌡️ {top_sector['Sector']} is strong ({top_sector['5-Day Performance (%)']}%)"
-                st.success(msg)
-           
+            st.text(f"⚪ {sym}: No recent quarterly headlines found.")
+
+# --- SIDEBAR CONTROL PANEL ---
+st.sidebar.header("🕹️ News Controller")
+if st.sidebar.button("🟢 Start Live News Radar", type="primary"):
+    st.session_state.news_scan = True
+    st.sidebar.success("News Automation Active!")
+
+if st.sidebar.button("🔴 Stop News Radar"):
+    st.session_state.news_scan = False
+    st.sidebar.warning("News Radar Paused.")
+
+# --- RUN ENGINE AUTOMATION ---
+if st.session_state.news_scan:
+    st.info("🔄 **Auto-Pilot News Mode ON:** The system is continuously rendering fresh content on your display panel below.")
+    run_news_radar()
+    
+    st.success("Watchlist loop complete! Next display update in 1 hour.")
+    time.sleep(3600) 
+    st.rerun()
+else:
+    st.warning("Automated News Engine is paused. Click 'Start Live News Radar' to fetch current trends.")
