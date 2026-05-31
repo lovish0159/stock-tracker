@@ -5,19 +5,16 @@ import numpy as np
 import requests
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import time
+from datetime import datetime
 
 # --- SECURE CREDENTIALS CONFIG ---
 BOT_TOKEN = st.secrets["TELEGRAM_BOT_TOKEN"]  
 CHAT_ID = "299717233"      
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1BHnQm0nYwl3paJ9PUEfHPlzMBLLXdpCZtdC59SFma58/edit?gid=0#gid=0"  # Apni sheet ka link yahan dalein
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1BHnQm0nYwl3paJ9PUEfHPlzMBLLXdpCZtdC59SFma58/edit?gid=0#gid=0"
 
 st.set_page_config(layout="wide")
 st.title("🛡️ Institutional Alpha Engine (Triple Confirmation)")
 st.subheader("SuperTrend + EMA Crossover + RSI + Volume Spread Scan")
-
-if "auto_scan" not in st.session_state:
-    st.session_state.auto_scan = False
 
 # --- GOOGLE SHEETS CONNECTION ---
 def get_google_sheet():
@@ -42,18 +39,15 @@ def send_telegram_alert(message):
 
 # --- QUANT MATHEMATICAL ENGINE ---
 def calculate_alpha_indicators(df):
-    # 1. Exponential Moving Averages (EMA 9 and EMA 21)
     df['EMA_9'] = df['Close'].ewm(span=9, adjust=False).mean()
     df['EMA_21'] = df['Close'].ewm(span=21, adjust=False).mean()
     
-    # 2. Relative Strength Index (RSI 14)
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
     loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
     rs = gain / loss
     df['RSI'] = 100 - (100 / (1 + rs))
 
-    # 3. SuperTrend (10, 3) Calculation
     high_low = df['High'] - df['Low']
     high_close = np.abs(df['High'] - df['Close'].shift())
     low_close = np.abs(df['Low'] - df['Close'].shift())
@@ -81,97 +75,79 @@ def calculate_alpha_indicators(df):
                 final_upperband.values[i] = final_upperband.iloc[i-1]
 
     df['SuperTrend_Dir'] = direction
-    
-    # 4. Institutional Volume MA Filter
     df['Vol_Avg'] = df['Volume'].rolling(window=20).mean()
     return df
 
-# --- CORE CORE MULTI-SCANNER ---
+# --- CORE MULTI-SCANNER COMPILER ---
 def execute_alpha_scan():
     sheet = get_google_sheet()
-    if not sheet: return
+    if not sheet: return None, None
     
     records = sheet.get_all_records()
     df_sheet = pd.DataFrame(records)
-    if df_sheet.empty or 'Symbol' not in df_sheet.columns: return
+    if df_sheet.empty or 'Symbol' not in df_sheet.columns: return None, None
     
     symbols = [str(s).strip() for s in df_sheet['Symbol'].dropna().tolist() if str(s).strip()]
+    
+    screen_results = []
+    tele_reports = []
     
     for sym in symbols:
         formatted_sym = sym if (sym.endswith(".NS") or sym.endswith(".BO")) else f"{sym}.NS"
         try:
-            # 5-Minute Candle Data download for Intraday Precision
-            data = yf.download(formatted_sym, period="3d", interval="5m", progress=False)
+            data = yf.download(formatted_sym, period="5d", interval="5m", progress=False)
             if data.empty: continue
             
-            df = calculate_alpha_indicators(data.copy())
-            last = df.iloc[-1]
-            prev = df.iloc[-2]
-            
-            close = round(last['Close'], 2)
-            rsi = round(last['RSI'], 1)
-            vol = int(last['Volume'])
-            v_avg = int(last['Vol_Avg'])
-            
-            # --- TRIPLE CONFIRMATION MATH MATHEMATICS ---
-            # 🟢 BUY MATCH: SuperTrend Green + EMA 9 crossed above EMA 21 + RSI is Strong but not Overbought + Huge Volume
-            ema_buy = (last['EMA_9'] > last['EMA_21']) and (prev['EMA_9'] <= prev['EMA_21'])
-            st_buy = (last['SuperTrend_Dir'] == 1)
-            rsi_buy = (rsi >= 50 and rsi <= 68)
-            volume_breakout = (vol > v_avg * 1.8) # 1.8x Institutional Volume
-            
-            # 🔴 SELL MATCH: SuperTrend Red + EMA 9 crossed below EMA 21 + RSI Weak + Big Volume
-            ema_sell = (last['EMA_9'] < last['EMA_21']) and (prev['EMA_9'] >= prev['EMA_21'])
-            st_sell = (last['SuperTrend_Dir'] == -1)
-            rsi_sell = (rsi <= 48 and rsi >= 32)
-
-            # Mathematical Risk-Reward Projections (0.6% SL / 1.5% Target)
-            if ema_buy and st_buy and rsi_buy and volume_breakout:
-                sl = round(close * 0.994, 2)
-                t1 = round(close * 1.012, 2)
-                t2 = round(close * 1.025, 2)
+            # MultiIndex Structure Flattening 
+            clean_df = pd.DataFrame(index=data.index)
+            if isinstance(data.columns, pd.MultiIndex):
+                clean_df['High'] = data['High'][formatted_sym]
+                clean_df['Low'] = data['Low'][formatted_sym]
+                clean_df['Close'] = data['Close'][formatted_sym]
+                clean_df['Volume'] = data['Volume'][formatted_sym]
+            else:
+                clean_df['High'] = data['High']
+                clean_df['Low'] = data['Low']
+                clean_df['Close'] = data['Close']
+                clean_df['Volume'] = data['Volume']
                 
-                msg = f"🟢 ✨ **TRIPLE CONFIRMATION BUY: {sym}** ✨\n\n" \
-                      f"💰 Entry Price: ₹{close}\n" \
-                      f"📈 RSI Momentum: {rsi} (Perfect)\n" \
-                      f"🔥 Volume: {vol:,} (Avg: {v_avg:,} -> 🚀 Institutional Buying!)\n\n" \
-                      f"🛡️ StopLoss (0.6%): ₹{sl}\n" \
-                      f"🎯 Target 1 (1.2%): ₹{t1}\n" \
-                      f"🎯 Target 2 (2.5%): ₹{t2}"
-                send_telegram_alert(msg)
+            clean_df = clean_df.dropna()
+            
+            if len(clean_df) > 25:
+                df = calculate_alpha_indicators(clean_df)
+                last = df.iloc[-1]
+                prev = df.iloc[-2]
                 
-            elif ema_sell and st_sell and rsi_sell and volume_breakout:
-                sl = round(close * 1.006, 2)
-                t1 = round(close * 0.988, 2)
-                t2 = round(close * 0.975, 2)
+                close = round(float(last['Close']), 2)
+                rsi = round(float(last['RSI']), 1) if not pd.isna(last['RSI']) else 50.0
+                vol = int(last['Volume'])
+                v_avg = int(last['Vol_Avg']) if not pd.isna(last['Vol_Avg']) else 1
                 
-                msg = f"🔴 ✨ **TRIPLE CONFIRMATION SELL: {sym}** ✨\n\n" \
-                      f"💰 Entry Price: ₹{close}\n" \
-                      f"📉 RSI Weakness: {rsi}\n" \
-                      f"⚠️ Volume: {vol:,} (Avg: {v_avg:,} -> 🚨 Big Block Exit!)\n\n" \
-                      f"🛡️ StopLoss (0.6%): ₹{sl}\n" \
-                      f"🎯 Target 1 (1.2%): ₹{t1}\n" \
-                      f"🎯 Target 2 (2.5%): ₹{t2}"
-                send_telegram_alert(msg)
-        except:
-            continue
+                vol_mult = round(vol / v_avg, 1) if v_avg > 0 else 1.0
+                
+                # --- TRIPLE CONFIRMATION MATH LOGIC ---
+                ema_buy = (last['EMA_9'] > last['EMA_21']) and (prev['EMA_9'] <= prev['EMA_21'])
+                st_buy = (last['SuperTrend_Dir'] == 1)
+                rsi_buy = (50 <= rsi <= 68)
+                volume_breakout = (vol > v_avg * 1.8)
+                
+                ema_sell = (last['EMA_9'] < last['EMA_21']) and (prev['EMA_9'] >= prev['EMA_21'])
+                st_sell = (last['SuperTrend_Dir'] == -1)
+                rsi_sell = (32 <= rsi <= 48)
 
-# --- AUTOMATION INTERFACE ---
-st.sidebar.header("🕹️ Control Dashboard")
-if st.sidebar.button("🟢 Start 5-Min Alpha Scanner", type="primary"):
-    st.session_state.auto_scan = True
-    st.sidebar.success("Triple Confirmation Scanner Active!")
-
-if st.sidebar.button("🔴 Stop Scanner"):
-    st.session_state.auto_scan = False
-    st.sidebar.warning("Scanner Paused.")
-
-if st.session_state.auto_scan:
-    st.info("🔄 **Auto-Pilot Mode Active:** System background mein har 5-minute par data refresh karke scan kar raha hai...")
-    with st.spinner("Analyzing Live Volatility Matrices..."):
-        execute_alpha_scan()
-    st.success("Scan complete! Matrix state holds clean.")
-    time.sleep(300)
-    st.rerun()
-else:
-    st.warning("⏸️ Scanner is currently resting. Click 'Start' to wake up the engine.")
+                verdict = "🟢 SuperTrend Bullish" if st_buy else "🔴 SuperTrend Bearish"
+                    
+                if ema_buy and st_buy and rsi_buy and volume_breakout:
+                    verdict = "🚀 TRIPLE BUY BREAKOUT"
+                    sl = round(close * 0.994, 2)
+                    t1 = round(close * 1.012, 2)
+                    t2 = round(close * 1.025, 2)
+                    report = f"🟢 **TRIPLE BUY MATCH: {sym}** ⚡\n\nPrice: ₹{close}\nRSI: {rsi}\nVol: {vol_mult}x\n\n🛑 SL: ₹{sl}\n🎯 T1: ₹{t1} | T2: ₹{t2}"
+                    tele_reports.append(report)
+                    
+                elif ema_sell and st_sell and rsi_sell and volume_breakout:
+                    verdict = "📉 TRIPLE SHORT BREAKOUT"
+                    sl = round(close * 1.006, 2)
+                    t1 = round(close * 0.988, 2)
+                    t2 = round(close * 0.975, 2)
+                    report = f"🔴 **TRIPLE SHORT MATCH: {sym}** ⚡\n\nPrice: ₹{close}\nRSI: {rsi}\nVol: {vol_mult
