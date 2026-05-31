@@ -10,7 +10,7 @@ import time
 # --- CONFIGURATION ---
 BOT_TOKEN = st.secrets["TELEGRAM_BOT_TOKEN"]  
 CHAT_ID = "299717233"      
-SHEET_URL = "YAHAN_APNI_GOOGLE_SHEET_KA_LINK_PASTE_KAREIN"  # Apni sheet ka link yahan dalein
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1BHnQm0nYwl3paJ9PUEfHPlzMBLLXdpCZtdC59SFma58/edit?gid=0#gid=0"  # Apni sheet ka link yahan dalein
 
 st.set_page_config(layout="wide")
 st.title("🤖 5-Min Auto-Pilot Intraday Engine")
