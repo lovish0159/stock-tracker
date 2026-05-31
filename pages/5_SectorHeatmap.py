@@ -30,12 +30,20 @@ def get_sector_performance():
             data_list.append({"Sector": name, "5-Day Performance (%)": round(pct_change, 2)})
     return pd.DataFrame(data_list)
 
+# ... (upar ka code waisa hi rehne dein)
+
 if st.button("🌡️ SCAN SECTOR HEATMAP"):
     with st.spinner("Analyzing Sector Money Flow..."):
         df = get_sector_performance()
+        
+        # 🟢 YAHAN FIX KIYA HAI:
+        # Sort karne se pehle index ko reset karna zaroori hai
+        df = df.reset_index(drop=True) 
+        
+        # Ab sort_values fail nahi hoga
         df = df.sort_values(by="5-Day Performance (%)", ascending=False)
         
-        # Color coding: Strong sectors green, weak red
+        # Heatmap display
         st.dataframe(df.style.background_gradient(subset=["5-Day Performance (%)"], cmap="RdYlGn"), 
                      use_container_width=True, hide_index=True)
         
