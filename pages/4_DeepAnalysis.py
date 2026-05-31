@@ -71,100 +71,130 @@ def analyze_deep_matrix(df_daily, df_weekly):
     
     return analysis
 
-# --- CORE SCANNER ACTION ---
-if st.button("🚀 EXECUTE 360° DEEP ANALYSIS SCAN", type="primary"):
+# --- DATA COMPILATION FUNCTION ---
+def run_core_scanner():
     sheet = get_google_sheet()
-    if sheet:
-        with st.spinner("Analyzing Deep Mathematical Strata..."):
-            records = sheet.get_all_records()
-            df_sheet = pd.DataFrame(records)
+    if not sheet: return None, None
+    
+    records = sheet.get_all_records()
+    df_sheet = pd.DataFrame(records)
+    
+    if df_sheet.empty or 'Symbol' not in df_sheet.columns: return None, None
+    
+    symbols = [str(s).strip() for s in df_sheet['Symbol'].dropna().tolist() if str(s).strip()]
+    deep_results = []
+    tele_reports = []
+    
+    for sym in symbols:
+        formatted_sym = sym if (sym.endswith(".NS") or sym.endswith(".BO")) else f"{sym}.NS"
+        try:
+            data_daily = yf.download(formatted_sym, period="1y", interval="1d", progress=False)
+            data_weekly = yf.download(formatted_sym, period="2y", interval="1wk", progress=False)
             
-            if not df_sheet.empty and 'Symbol' in df_sheet.columns:
-                symbols = [str(s).strip() for s in df_sheet['Symbol'].dropna().tolist() if str(s).strip()]
-                
-                deep_results = []
-                tele_reports = []
-                
-                for sym in symbols:
-                    formatted_sym = sym if (sym.endswith(".NS") or sym.endswith(".BO")) else f"{sym}.NS"
-                    try:
-                        # Fetch Data from APIs
-                        data_daily = yf.download(formatted_sym, period="1y", interval="1d", progress=False)
-                        data_weekly = yf.download(formatted_sym, period="2y", interval="1wk", progress=False)
-                        
-                        if data_daily.empty or data_weekly.empty: 
-                            continue
-                        
-                        # --- MultiIndex Structure Flattening Logic ---
-                        clean_daily = pd.DataFrame(index=data_daily.index)
-                        clean_weekly = pd.DataFrame(index=data_weekly.index)
-                        
-                        if isinstance(data_daily.columns, pd.MultiIndex):
-                            clean_daily['Close'] = data_daily['Close'][formatted_sym]
-                            clean_daily['Volume'] = data_daily['Volume'][formatted_sym]
-                            clean_weekly['Close'] = data_weekly['Close'][formatted_sym]
-                        else:
-                            clean_daily['Close'] = data_daily['Close']
-                            clean_daily['Volume'] = data_daily['Volume']
-                            clean_weekly['Close'] = data_weekly['Close']
-                            
-                        clean_daily = clean_daily.dropna()
-                        clean_weekly = clean_weekly.dropna()
-                        
-                        # Run analysis on isolated safe data structures
-                        metrics = analyze_deep_matrix(clean_daily, clean_weekly)
-                        
-                        # --- SCORING INTELLIGENCE SYSTEM ---
-                        score = 0
-                        verdict = "NEUTRAL STATE"
-                        
-                        if metrics['weekly_trend'] == "BULLISH": score += 1
-                        if 50 <= metrics['rsi_daily'] <= 65: score += 1
-                        if metrics['vol_shock'] >= 1.5: score += 1
-                        if 0 < metrics['z_score'] < 1.5: score += 1
-                        
-                        if score >= 3:
-                            verdict = "💎 INSTITUTIONAL ACCUMULATION (STRONG BUY)"
-                            report = f"🏛️ **DEEP ALPHA RADAR: {sym}** 💎\n\n" \
-                                     f"💰 Current Price: ₹{metrics['live_price']}\n" \
-                                     f"📊 Vol Shock: {metrics['vol_shock']}x (Heavy Delivery & Block Buying!)\n" \
-                                     f"📈 Daily RSI: {metrics['rsi_daily']} (Perfect Momentum Zone)\n" \
-                                     f"🧭 Long-Term Trend: {metrics['weekly_trend']}\n" \
-                                     f"📐 Statistical Deviation (Z-Score): {metrics['z_score']}\n" \
-                                     f"📅 1-Month Return: {metrics['return_1m']}%\n\n" \
-                                     f"🎯 **Verdict:** Institutional Interest Detected. Low Risk Entry Zone."
-                            tele_reports.append(report)
-                        elif score <= 1 and metrics['z_score'] > 2.0:
-                            verdict = "⚠️ OVERVALUED / DISTRIBUTION (RETAIL TRAP)"
-                        
-                        deep_results.append({
-                            "Stock": sym, "Price": metrics['live_price'], "Vol Shock": metrics['vol_shock'],
-                            "Z-Score": metrics['z_score'], "Daily RSI": metrics['rsi_daily'], 
-                            "Macro Trend": metrics['weekly_trend'], "Verdict": verdict
-                        })
-                    except Exception as e:
-                        # explicitly ignore specific failures to keep scanning other portfolio stocks
-                        continue
-                
-                # UI Render Grid
-                if deep_results:
-                    st.subheader("📊 Quant Institutional Scoring Matrix")
-                    res_df = pd.DataFrame(deep_results)
-                    
-                    # Highlight signals style matrix
-                    def style_verdict(val):
-                        if "STRONG BUY" in val: return 'color: white; background-color: green; font-weight: bold'
-                        elif "RETAIL TRAP" in val: return 'color: white; background-color: red; font-weight: bold'
-                        return ''
-                        
-                    st.dataframe(res_df.style.map(style_verdict, subset=['Verdict']), use_container_width=True, hide_index=True)
-                    
-                    if tele_reports:
-                        send_telegram_alert("🏛️ **INSTITUTIONAL QUANT DATA REPORT** 🏛️")
-                        for rep in tele_reports:
-                            send_telegram_alert(rep)
-                        st.success("✅ Deep Analysis Complete! Strong institutional setups dispatched to Telegram.")
-                else:
-                    st.warning("⚠️ Google Sheet data fetched, but failed to extract market technicals. Check stock tickers syntax.")
+            if data_daily.empty or data_weekly.empty: continue
+            
+            clean_daily = pd.DataFrame(index=data_daily.index)
+            clean_weekly = pd.DataFrame(index=data_weekly.index)
+            
+            if isinstance(data_daily.columns, pd.MultiIndex):
+                clean_daily['Close'] = data_daily['Close'][formatted_sym]
+                clean_daily['Volume'] = data_daily['Volume'][formatted_sym]
+                clean_weekly['Close'] = data_weekly['Close'][formatted_sym]
             else:
-                st.warning("⚠️ Watchlist empty or 'Symbol' column missing in your Google Sheet.")
+                clean_daily['Close'] = data_daily['Close']
+                clean_daily['Volume'] = data_daily['Volume']
+                clean_weekly['Close'] = data_weekly['Close']
+                
+            clean_daily = clean_daily.dropna()
+            clean_weekly = clean_weekly.dropna()
+            
+            metrics = analyze_deep_matrix(clean_daily, clean_weekly)
+            
+            score = 0
+            verdict = "NEUTRAL STATE"
+            
+            if metrics['weekly_trend'] == "BULLISH": score += 1
+            if 50 <= metrics['rsi_daily'] <= 65: score += 1
+            if metrics['vol_shock'] >= 1.5: score += 1
+            if 0 < metrics['z_score'] < 1.5: score += 1
+            
+            if score >= 3:
+                verdict = "💎 INSTITUTIONAL ACCUMULATION (STRONG BUY)"
+                report = f"🏛️ **DEEP ALPHA RADAR: {sym}** 💎\n\n" \
+                         f"💰 Current Price: ₹{metrics['live_price']}\n" \
+                         f"📊 Vol Shock: {metrics['vol_shock']}x\n" \
+                         f"📈 Daily RSI: {metrics['rsi_daily']}\n" \
+                         f"🧭 Long-Term Trend: {metrics['weekly_trend']}\n" \
+                         f"📐 Z-Score: {metrics['z_score']}\n" \
+                         f"📅 1-Month Return: {metrics['return_1m']}%\n\n" \
+                         f"🎯 **Verdict:** Institutional Accumulation Zone."
+                tele_reports.append(report)
+            elif score <= 1 and metrics['z_score'] > 2.0:
+                verdict = "⚠️ OVERVALUED / DISTRIBUTION (RETAIL TRAP)"
+            
+            deep_results.append({
+                "Stock": sym, "Price": metrics['live_price'], "Vol Shock": metrics['vol_shock'],
+                "Z-Score": metrics['z_score'], "Daily RSI": metrics['rsi_daily'], 
+                "Macro Trend": metrics['weekly_trend'], "Verdict": verdict
+            })
+        except Exception as e:
+            continue
+            
+    return deep_results, tele_reports
+
+# ==========================================
+# SIDEBAR CONTROL & BUTTONS MATRIX
+# ==========================================
+st.sidebar.header("🕹️ Command Center")
+
+# Button 1: Screen UI Analysis
+btn_scan = st.sidebar.button("🚀 RUN SCREEN UI SCAN", type="primary", use_container_width=True)
+
+# Button 2: Telegram Dispatcher
+btn_telegram = st.sidebar.button("📡 DISPATCH TO TELEGRAM", use_container_width=True)
+
+# --- ACTION TRIGGER: BUTTON 1 (SCREEN DISPLAY ONLY) ---
+if btn_scan:
+    with st.spinner("Analyzing Deep Mathematical Strata..."):
+        deep_results, _ = run_core_scanner()
+        
+        if deep_results:
+            st.subheader("📊 Quant Institutional Scoring Matrix (Local View)")
+            res_df = pd.DataFrame(deep_results)
+            
+            def style_verdict(val):
+                if "STRONG BUY" in val: return 'color: white; background-color: green; font-weight: bold'
+                elif "RETAIL TRAP" in val: return 'color: white; background-color: red; font-weight: bold'
+                return ''
+                
+            st.dataframe(res_df.style.map(style_verdict, subset=['Verdict']), use_container_width=True, hide_index=True)
+            st.success("✅ Screen Scan Complete! Report rendered locally. No alerts sent to Telegram.")
+        else:
+            st.warning("⚠️ Watchlist data not found or Google Sheet empty.")
+
+# --- ACTION TRIGGER: BUTTON 2 (TELEGRAM DISPATCH) ---
+if btn_telegram:
+    with st.spinner("Compiling and Dispatching Reports via Telegram Bot..."):
+        deep_results, tele_reports = run_core_scanner()
+        
+        # Pehle screen par table render hoga
+        if deep_results:
+            st.subheader("📊 Quant Institutional Scoring Matrix")
+            res_df = pd.DataFrame(deep_results)
+            def style_verdict(val):
+                if "STRONG BUY" in val: return 'color: white; background-color: green; font-weight: bold'
+                elif "RETAIL TRAP" in val: return 'color: white; background-color: red; font-weight: bold'
+                return ''
+            st.dataframe(res_df.style.map(style_verdict, subset=['Verdict']), use_container_width=True, hide_index=True)
+            
+            # Phir on-demand Telegram logic execute hoga
+            if tele_reports:
+                send_telegram_alert("🏛️ **ON-DEMAND INSTITUTIONAL QUANT REPORT** 🏛️")
+                for rep in tele_reports:
+                    send_telegram_alert(rep)
+                st.success(f"✅ Dispatched! {len(tele_reports)} strong institutional setups sent to Telegram Channel.")
+            else:
+                send_telegram_alert("🏛️ **QUANT REPORT:** Current scan indicates Neutral/Retail traps across the watchlist. No strong buy setups found today.")
+                st.info("⚠️ Watchlist completed. No strong accumulation found, Telegram status updated to Neutral.")
+        else:
+            st.warning("⚠️ Failed to trigger pipeline. Check connection settings.")
