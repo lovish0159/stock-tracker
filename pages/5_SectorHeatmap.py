@@ -21,13 +21,24 @@ sectors = {
 def get_sector_performance():
     data_list = []
     for name, ticker in sectors.items():
-        # Pichle 5 din ka data taaki trend pata chale
-        hist = yf.download(ticker, period="5d", progress=False)
-        if not hist.empty:
-            curr_price = hist['Close'].iloc[-1]
-            prev_price = hist['Close'].iloc[0]
-            pct_change = ((curr_price - prev_price) / prev_price) * 100
-            data_list.append({"Sector": name, "5-Day Performance (%)": round(pct_change, 2)})
+        try:
+            # Pichle 5 din ka data
+            hist = yf.download(ticker, period="5d", progress=False)
+            if not hist.empty:
+                curr_price = float(hist['Close'].iloc[-1])
+                prev_price = float(hist['Close'].iloc[0])
+                
+                # Percentage change calculation
+                pct_change = ((curr_price - prev_price) / prev_price) * 100
+                
+                # Data list mein saaf numeric values daalein
+                data_list.append({
+                    "Sector": name, 
+                    "5-Day Performance (%)": float(round(pct_change, 2))
+                })
+        except Exception:
+            continue
+            
     return pd.DataFrame(data_list)
 
 # ... (upar ka code waisa hi rehne dein)
