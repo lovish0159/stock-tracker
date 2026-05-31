@@ -10,8 +10,8 @@ from datetime import datetime
 # --- SECURE CREDENTIALS CONFIG ---
 BOT_TOKEN = st.secrets["TELEGRAM_BOT_TOKEN"]  
 CHAT_ID = "299717233"      
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1BHnQm0nYwl3paJ9PUEfHPlzMBLLXdpCZtdC59SFma58/edit?gid=0#gid=0"
-
+# 💡 Gid part hata kar ekdum clean url set karein
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1BHnQm0nYwl3paJ9PUEfHPlzMBLLXdpCZtdC59SFma58/edit"
 st.set_page_config(layout="wide")
 st.title("🛡️ Institutional Alpha Engine (Triple Confirmation)")
 st.subheader("SuperTrend + EMA Crossover + RSI + Volume Spread Scan")
