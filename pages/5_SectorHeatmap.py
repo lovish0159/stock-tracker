@@ -36,32 +36,32 @@ if st.button("🌡️ SCAN SECTOR HEATMAP"):
     with st.spinner("Analyzing Sector Money Flow..."):
         df = get_sector_performance()
         
-        # 🟢 YAHAN FIX KIYA HAI (3-Step Cleaning):
-        # 1. Reset index taaki labels clean ho jayein
-        # 2. DataFrame ki copy banayein taaki koi reference error na ho
-        # 3. Sort karein
-        df = df.reset_index(drop=True).copy()
+        # 🟢 BULLETPROOF CLEANING LOGIC
+        # 1. Sirf wahi rows rakhein jahan data available hai
+        df = df.dropna(subset=["5-Day Performance (%)"])
+        
+        # 2. Index ko puri tarah se reset karein (drop=True se purane index udd jayenge)
+        df = df.reset_index(drop=True)
+        
+        # 3. Explicitly Column ko Numeric mein convert karein
+        df["5-Day Performance (%)"] = pd.to_numeric(df["5-Day Performance (%)"])
+        
+        # 4. Ab sort karein
         df = df.sort_values(by="5-Day Performance (%)", ascending=False)
         
         # Heatmap display
         st.dataframe(df.style.background_gradient(subset=["5-Day Performance (%)"], cmap="RdYlGn"), 
                      use_container_width=True, hide_index=True)
         
-        # ... baki ka code waisa hi rehne dein
-        
-        # Heatmap display
-        st.dataframe(df.style.background_gradient(subset=["5-Day Performance (%)"], cmap="RdYlGn"), 
-                     use_container_width=True, hide_index=True)
-        
-        # Top performer alert
-        top_sector = df.iloc[0]
-        if top_sector['5-Day Performance (%)'] > 0:
-            msg = f"🌡️ **SECTOR HOTSPOT**: {top_sector['Sector']} sabse strong perform kar raha hai ({top_sector['5-Day Performance (%)']}%)"
-            st.success(msg)
-            
-            # Agar sector 3% se zyada chala hai, toh Telegram par alert bhejo
-            if top_sector['5-Day Performance (%)'] > 3.0:
-                BOT_TOKEN = st.secrets["TELEGRAM_BOT_TOKEN"]
-                CHAT_ID = "299717233"
-                requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", 
-                              json={"chat_id": CHAT_ID, "text": f"🔥 {msg} - Yahan ke stocks mein momentum check karein!"})
+        # Top performer alert (Check karein ki df khali toh nahi hai)
+        if not df.empty:
+            top_sector = df.iloc[0]
+            if top_sector['5-Day Performance (%)'] > 0:
+                msg = f"🌡️ **SECTOR HOTSPOT**: {top_sector['Sector']} is strong ({top_sector['5-Day Performance (%)']}%)"
+                st.success(msg)
+                
+                if top_sector['5-Day Performance (%)'] > 3.0:
+                    BOT_TOKEN = st.secrets["TELEGRAM_BOT_TOKEN"]
+                    CHAT_ID = "299717233"
+                    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", 
+                                  json={"chat_id": CHAT_ID, "text": f"🔥 {msg} - Check stocks now!"})
