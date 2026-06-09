@@ -6,29 +6,28 @@ import re
 import PyPDF2
 
 # ==========================================
-# 1. ENTERPRISE CONFIGURATION & SYSTEM STATE
+# 1. ENTERPRISE CONFIGURATION
 # ==========================================
-st.set_page_config(page_title="Pro Neural Audio Synthesizer", page_icon="🎙️", layout="wide")
+st.set_page_config(page_title="Pro Neural Audio", page_icon="🎙️", layout="wide")
 
-# Session State Initializer (Prevents UI Freezing)
-if "extracted_text" not in st.session_state:
-    st.session_state.extracted_text = ""
+# 🎯 EXPERT FIX: Session State Initialization (Memory Lock)
+if "text_content" not in st.session_state:
+    st.session_state.text_content = ""
 if "audio_data" not in st.session_state:
     st.session_state.audio_data = None
 if "processing_complete" not in st.session_state:
     st.session_state.processing_complete = False
-if "last_uploaded_file" not in st.session_state:
-    st.session_state.last_uploaded_file = None
+if "last_processed_file" not in st.session_state:
+    st.session_state.last_processed_file = None
 
 def apply_pro_css():
     st.markdown("""
         <style>
             #MainMenu, footer, header {visibility: hidden;}
-            .main-header { font-size: 2.5rem; color: #0f172a; text-align: center; font-weight: 800; margin-bottom: 0px; letter-spacing: -1px;}
-            .sub-header { text-align: center; color: #64748b; margin-bottom: 2rem; font-size: 16px; font-weight: 500;}
+            .main-header { font-size: 2.3rem; color: #0f172a; text-align: center; font-weight: 800; margin-bottom: 0px;}
+            .sub-header { text-align: center; color: #64748b; margin-bottom: 2rem; font-size: 15px;}
             .stTextArea textarea { font-size: 16px; border-radius: 12px; border: 1px solid #cbd5e1; padding: 15px;}
             div.stButton > button { border-radius: 8px; font-weight: 600; padding: 0.5rem 1rem; }
-            [data-testid="stFileUploadDropzone"] { border: 2px solid #3b82f6; border-radius: 10px; background-color: #f8fafc; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -36,7 +35,6 @@ def apply_pro_css():
 # 2. DATA EXTRACTION ENGINE
 # ==========================================
 def extract_text_from_pdf(pdf_file) -> str:
-    """Fast extraction of PDF text into memory segments."""
     extracted_text = []
     try:
         pdf_reader = PyPDF2.PdfReader(pdf_file)
@@ -50,7 +48,6 @@ def extract_text_from_pdf(pdf_file) -> str:
         return ""
 
 def sanitize_text(text: str) -> str:
-    """Ultra-fast regex to clean text formatting."""
     text = re.sub(r'\n+', ' ', text)  
     text = re.sub(r'\s+', ' ', text)  
     return text.strip()
@@ -91,45 +88,43 @@ def main():
     apply_pro_css()
 
     st.markdown("<div class='main-header'>🎙️ Pro Neural Audio Synthesizer</div>", unsafe_allow_html=True)
-    st.markdown("<div class='sub-header'>State-Managed Architecture for Instant Processing</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sub-header'>Upload File ➔ Auto-Extract ➔ Synthesize</div>", unsafe_allow_html=True)
 
     left_col, right_col = st.columns([2, 1])
 
     with left_col:
         st.markdown("### 📂 Input Source")
         
-        # File Uploader with State Trigger
-        uploaded_file = st.file_uploader("Click 'Browse files' to select a PDF or TXT", type=["txt", "pdf"])
+        uploaded_file = st.file_uploader("Select a PDF or TXT file to process:", type=["txt", "pdf"])
         
+        # Core fix: Checking if new file is uploaded
         if uploaded_file is not None:
-            current_file_key = f"{uploaded_file.name}_{uploaded_file.size}"
+            file_signature = f"{uploaded_file.name}_{uploaded_file.size}"
             
-            # Agar naya file upload hua hai toh process karein, varna skip karein
-            if st.session_state.last_uploaded_file != current_file_key:
-                with st.spinner("⚡ Extracting text instantly..."):
+            # Agar file pehli baar select hui hai, tabhi process karein
+            if st.session_state.last_processed_file != file_signature:
+                with st.spinner("⚡ Extracting text from file..."):
                     if uploaded_file.name.endswith(".pdf"):
-                        text_extracted = extract_text_from_pdf(uploaded_file)
+                        extracted_string = extract_text_from_pdf(uploaded_file)
                     else:
-                        text_extracted = uploaded_file.getvalue().decode("utf-8")
+                        extracted_string = uploaded_file.getvalue().decode("utf-8")
                     
-                    # Store in session state and trigger clean rerun
-                    st.session_state.extracted_text = text_extracted
-                    st.session_state.last_uploaded_file = current_file_key
+                    # Memory Update
+                    st.session_state.text_content = extracted_string
+                    st.session_state.last_processed_file = file_signature
                     st.session_state.audio_data = None
                     st.session_state.processing_complete = False
+                    
+                    # Force page refresh to update the UI instantly
                     st.rerun()
 
-        # Text area reads directly from State Memory
-        text_input = st.text_area(
+        # 🎯 EXPERT FIX: `key="text_content"` automatically binds this box to our extracted text!
+        st.text_area(
             "Review or Edit Text Here:", 
-            value=st.session_state.extracted_text, 
+            key="text_content", 
             height=300, 
-            placeholder="Your file text will load here automatically after selection..."
+            placeholder="Your file text will load here automatically..."
         )
-        
-        # Manual edit handling to sync state
-        if text_input != st.session_state.extracted_text:
-            st.session_state.extracted_text = text_input
 
     with right_col:
         st.markdown("### ⚙️ Engine Settings")
@@ -142,25 +137,25 @@ def main():
         st.markdown("<br>", unsafe_allow_html=True)
 
         if st.button("🚀 Synthesize Audio Now", use_container_width=True, type="primary"):
-            clean_text = sanitize_text(st.session_state.extracted_text)
+            # Text area ki value directly state se uthayi jayegi
+            clean_text = sanitize_text(st.session_state.text_content)
             
             if not clean_text:
-                st.error("⚠️ Please provide text or upload a file first.")
+                st.error("⚠️ Please type text or upload a file first.")
             else:
                 st.session_state.audio_data = None
                 st.session_state.processing_complete = False
-                
                 progress_bar = st.progress(0, text="⚡ Activating Neural Engine...")
                 
                 try:
-                    progress_bar.progress(40, text="Compiling voice matrix...")
+                    progress_bar.progress(40, text="Compiling HD voice matrix...")
                     audio_bytes = generate_audio_sync(clean_text, selected_voice_id, speech_speed)
                     
                     st.session_state.audio_data = audio_bytes
                     st.session_state.processing_complete = True
                     
-                    progress_bar.progress(100, text="✅ Done!")
-                    st.success("🎉 Synthesis Complete!")
+                    progress_bar.progress(100, text="✅ Audio compiled!")
+                    st.success("🎉 Synthesis Complete! Ready for playback.")
                     progress_bar.empty()
                     
                 except Exception as e:
@@ -169,15 +164,14 @@ def main():
 
     st.divider()
 
-    # Display components seamlessly from state memory
     if st.session_state.processing_complete and st.session_state.audio_data:
         st.markdown("### 🎧 Playback & Download")
         st.audio(st.session_state.audio_data, format='audio/mp3')
         
         st.download_button(
-            label="📥 Download Audio File (MP3)",
+            label="📥 Download HD Audio (MP3)",
             data=st.session_state.audio_data,
-            file_name=f"Neural_Audio_{datetime.now().strftime('%d%m%Y_%H%M')}.mp3",
+            file_name=f"HD_Audio_{datetime.now().strftime('%d%m%Y_%H%M')}.mp3",
             mime="audio/mp3",
             use_container_width=True
         )
