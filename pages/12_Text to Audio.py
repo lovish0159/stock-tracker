@@ -29,7 +29,8 @@ def apply_pro_css():
 class TTSEngine:
     """Professional Text-to-Speech Engine with chunking and exponential backoff."""
     
-    def __init__(self, chunk_size: int = 1500, max_retries: int = 4, base_delay: float = 2.0):
+    # 🎯 EXPERT FIX: Chunk size reduced to 200 to strictly comply with Google TTS API limits
+    def __init__(self, chunk_size: int = 200, max_retries: int = 4, base_delay: float = 1.0):
         self.chunk_size = chunk_size
         self.max_retries = max_retries
         self.base_delay = base_delay
@@ -64,6 +65,7 @@ class TTSEngine:
         for index, chunk in enumerate(chunks):
             delay = self.base_delay
             success = False
+            last_error = ""
             
             for attempt in range(self.max_retries):
                 try:
@@ -75,20 +77,18 @@ class TTSEngine:
                     break # Break retry loop on success
                     
                 except Exception as e:
-                    if "429" in str(e):
-                        logging.warning(f"Rate limited on chunk {index+1}. Attempt {attempt+1}/{self.max_retries}. Retrying in {delay}s...")
-                        time.sleep(delay)
-                        delay *= 2 # Exponential Backoff (2s -> 4s -> 8s)
-                    else:
-                        logging.error(f"TTS Error: {e}")
-                        raise e
+                    last_error = str(e)
+                    logging.warning(f"Error on chunk {index+1}. Attempt {attempt+1}/{self.max_retries}. Retrying in {delay}s... Error: {last_error}")
+                    time.sleep(delay)
+                    delay *= 2 # Exponential Backoff (1s -> 2s -> 4s -> 8s)
             
             if not success:
-                raise Exception(f"Failed to process segment {index+1} after {self.max_retries} attempts.")
+                # 🎯 Show exact error so we know exactly why Google rejected it
+                raise Exception(f"Failed at segment {index+1}/{total_chunks}. Google API blocked it. Reason: {last_error}")
 
             # Polite delay between successful chunks to avoid triggering 429
             if index < total_chunks - 1:
-                time.sleep(1.5)
+                time.sleep(0.5)
             
             # Update UI Progress
             percent_complete = int(((index + 1) / total_chunks) * 100)
@@ -135,18 +135,17 @@ def main():
         if not clean_text:
             st.error("⚠️ Input required: Please provide text data to process.")
         else:
-            # Reset state for new processing
             st.session_state.audio_data = None
             st.session_state.processing_complete = False
             
             progress_bar = st.progress(0, text="Initializing synthesis engine...")
-            engine = TTSEngine(chunk_size=1200) # Slightly stricter chunk size for utmost safety
+            
+            # Use smaller, safer chunk sizes (200 chars)
+            engine = TTSEngine(chunk_size=200) 
             
             try:
-                # Execute Core Engine
                 audio_bytes = engine.synthesize(clean_text, lang_choice[1], progress_bar)
                 
-                # Store in session state
                 st.session_state.audio_data = audio_bytes
                 st.session_state.processing_complete = True
                 
@@ -170,8 +169,7 @@ def main():
         )
 
     st.divider()
-    st.caption("🔒 System Integrity: Stable | Exponential Backoff: Active | Chunking: Optimized")
+    st.caption("🔒 System Integrity: Stable | Exponential Backoff: Active | API Chunk Limits: Safe (200 chars)")
 
 if __name__ == "__main__":
     main()
-    
