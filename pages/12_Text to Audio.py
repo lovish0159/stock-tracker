@@ -10,7 +10,7 @@ import PyPDF2
 # ==========================================
 st.set_page_config(page_title="Pro Neural Audio", page_icon="🎙️", layout="wide")
 
-# 🎯 EXPERT FIX: Session State Initialization (Memory Lock)
+# Session State Initialization (Memory Lock)
 if "text_content" not in st.session_state:
     st.session_state.text_content = ""
 if "audio_data" not in st.session_state:
@@ -28,6 +28,7 @@ def apply_pro_css():
             .sub-header { text-align: center; color: #64748b; margin-bottom: 2rem; font-size: 15px;}
             .stTextArea textarea { font-size: 16px; border-radius: 12px; border: 1px solid #cbd5e1; padding: 15px;}
             div.stButton > button { border-radius: 8px; font-weight: 600; padding: 0.5rem 1rem; }
+            /* 🎯 EXPERT FIX: Uploader Custom CSS removed to prevent mobile click-blocks */
         </style>
     """, unsafe_allow_html=True)
 
@@ -95,13 +96,12 @@ def main():
     with left_col:
         st.markdown("### 📂 Input Source")
         
+        # Native, Unstyled File Uploader for maximum mobile compatibility
         uploaded_file = st.file_uploader("Select a PDF or TXT file to process:", type=["txt", "pdf"])
         
-        # Core fix: Checking if new file is uploaded
         if uploaded_file is not None:
             file_signature = f"{uploaded_file.name}_{uploaded_file.size}"
             
-            # Agar file pehli baar select hui hai, tabhi process karein
             if st.session_state.last_processed_file != file_signature:
                 with st.spinner("⚡ Extracting text from file..."):
                     if uploaded_file.name.endswith(".pdf"):
@@ -109,16 +109,13 @@ def main():
                     else:
                         extracted_string = uploaded_file.getvalue().decode("utf-8")
                     
-                    # Memory Update
                     st.session_state.text_content = extracted_string
                     st.session_state.last_processed_file = file_signature
                     st.session_state.audio_data = None
                     st.session_state.processing_complete = False
                     
-                    # Force page refresh to update the UI instantly
                     st.rerun()
 
-        # 🎯 EXPERT FIX: `key="text_content"` automatically binds this box to our extracted text!
         st.text_area(
             "Review or Edit Text Here:", 
             key="text_content", 
@@ -137,7 +134,6 @@ def main():
         st.markdown("<br>", unsafe_allow_html=True)
 
         if st.button("🚀 Synthesize Audio Now", use_container_width=True, type="primary"):
-            # Text area ki value directly state se uthayi jayegi
             clean_text = sanitize_text(st.session_state.text_content)
             
             if not clean_text:
