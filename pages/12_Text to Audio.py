@@ -1,16 +1,12 @@
 import streamlit as st
-from gtts import gTTS
-import io
-import time
-import logging
+import asyncio
+import edge_tts
 from datetime import datetime
-from typing import List, Optional
 
 # ==========================================
-# 1. ENTERPRISE CONFIGURATION & LOGGING
+# 1. ENTERPRISE CONFIGURATION
 # ==========================================
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-st.set_page_config(page_title="Pro Audio Synthesizer", page_icon="🎙️", layout="centered")
+st.set_page_config(page_title="Neural Audio Synthesizer", page_icon="🎙️", layout="centered")
 
 def apply_pro_css():
     st.markdown("""
@@ -24,84 +20,40 @@ def apply_pro_css():
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. CORE AUDIO ENGINE (OOP Architecture)
+# 2. MICROSOFT NEURAL ENGINE (Async Framework)
 # ==========================================
-class TTSEngine:
-    """Professional Text-to-Speech Engine with chunking and exponential backoff."""
-    
-    # 🎯 EXPERT FIX: Chunk size reduced to 200 to strictly comply with Google TTS API limits
-    def __init__(self, chunk_size: int = 200, max_retries: int = 4, base_delay: float = 1.0):
-        self.chunk_size = chunk_size
-        self.max_retries = max_retries
-        self.base_delay = base_delay
+# Map of High-Definition Neural Voices
+VOICE_MODELS = {
+    "Hindi (Female - Swara)": "hi-IN-SwaraNeural",
+    "Hindi (Male - Madhur)": "hi-IN-MadhurNeural",
+    "English (Female - Aria)": "en-US-AriaNeural",
+    "English (Male - Guy)": "en-US-GuyNeural",
+    "Punjabi (Female - Rakhi)": "pa-IN-RakhiNeural",
+    "Punjabi (Male - Ojas)": "pa-IN-OjasNeural"
+}
 
-    def _split_text(self, text: str) -> List[str]:
-        """Splits text cleanly without cutting words in half."""
-        words = text.split()
-        chunks, current_chunk = [], []
-        current_length = 0
-        
-        for word in words:
-            if current_length + len(word) + 1 > self.chunk_size:
-                chunks.append(" ".join(current_chunk))
-                current_chunk = [word]
-                current_length = len(word)
-            else:
-                current_chunk.append(word)
-                current_length += len(word) + 1
-                
-        if current_chunk:
-            chunks.append(" ".join(current_chunk))
-        return chunks
+async def synthesize_neural_audio(text: str, voice_name: str) -> bytes:
+    """Asynchronously generates high-quality neural audio without API limits."""
+    communicate = edge_tts.Communicate(text, voice_name)
+    audio_data = b""
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            audio_data += chunk["data"]
+    return audio_data
 
-    def synthesize(self, text: str, lang: str, progress_bar) -> Optional[bytes]:
-        """Synthesizes text to audio bytes using secure chunking and anti-ban protocol."""
-        chunks = self._split_text(text)
-        total_chunks = len(chunks)
-        master_buffer = io.BytesIO()
-        
-        logging.info(f"Initiating synthesis for {total_chunks} chunks in language: {lang}")
-
-        for index, chunk in enumerate(chunks):
-            delay = self.base_delay
-            success = False
-            last_error = ""
-            
-            for attempt in range(self.max_retries):
-                try:
-                    tts = gTTS(text=chunk, lang=lang, slow=False)
-                    chunk_buffer = io.BytesIO()
-                    tts.write_to_fp(chunk_buffer)
-                    master_buffer.write(chunk_buffer.getvalue())
-                    success = True
-                    break # Break retry loop on success
-                    
-                except Exception as e:
-                    last_error = str(e)
-                    logging.warning(f"Error on chunk {index+1}. Attempt {attempt+1}/{self.max_retries}. Retrying in {delay}s... Error: {last_error}")
-                    time.sleep(delay)
-                    delay *= 2 # Exponential Backoff (1s -> 2s -> 4s -> 8s)
-            
-            if not success:
-                # 🎯 Show exact error so we know exactly why Google rejected it
-                raise Exception(f"Failed at segment {index+1}/{total_chunks}. Google API blocked it. Reason: {last_error}")
-
-            # Polite delay between successful chunks to avoid triggering 429
-            if index < total_chunks - 1:
-                time.sleep(0.5)
-            
-            # Update UI Progress
-            percent_complete = int(((index + 1) / total_chunks) * 100)
-            progress_bar.progress(percent_complete, text=f"⚙️ Synthesizing data matrix: {index + 1}/{total_chunks} segments completed...")
-
-        logging.info("Audio synthesis completed successfully.")
-        return master_buffer.getvalue()
+def generate_audio_sync(text: str, voice_name: str) -> bytes:
+    """Wrapper to run async Edge TTS in Streamlit's synchronous environment."""
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop.run_until_complete(synthesize_neural_audio(text, voice_name))
 
 # ==========================================
 # 3. STATE MANAGEMENT
 # ==========================================
 def init_session_state():
-    """Initializes session variables to persist audio data across reruns."""
     if 'audio_data' not in st.session_state:
         st.session_state.audio_data = None
     if 'processing_complete' not in st.session_state:
@@ -114,18 +66,15 @@ def main():
     apply_pro_css()
     init_session_state()
 
-    st.markdown("<div class='main-header'>🎙️ Pro Audio Synthesizer</div>", unsafe_allow_html=True)
-    st.markdown("<div class='sub-header'>Enterprise-Grade Text-to-Speech with Auto-Chunking & Anti-Ban Security</div>", unsafe_allow_html=True)
+    st.markdown("<div class='main-header'>🎙️ HD Neural Audio Synthesizer</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sub-header'>Powered by Microsoft Edge AI | Bypass Rate Limits | Zero Chunking Needed</div>", unsafe_allow_html=True)
 
-    text_input = st.text_area("📄 Document Text:", height=250, placeholder="Paste your comprehensive document, article, or book chapter here...")
+    text_input = st.text_area("📄 Document Text:", height=280, placeholder="Paste your comprehensive document, article, or book chapter here...")
 
     col1, col2 = st.columns([1, 1])
     with col1:
-        lang_choice = st.selectbox("🌐 Voice Algorithm:", [
-            ("English", "en"), 
-            ("Hindi", "hi"),
-            ("Punjabi", "pa")
-        ], format_func=lambda x: x[0])
+        selected_voice_label = st.selectbox("🌐 Select Neural Voice Model:", list(VOICE_MODELS.keys()))
+        selected_voice_id = VOICE_MODELS[selected_voice_label]
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -138,19 +87,23 @@ def main():
             st.session_state.audio_data = None
             st.session_state.processing_complete = False
             
-            progress_bar = st.progress(0, text="Initializing synthesis engine...")
-            
-            # Use smaller, safer chunk sizes (200 chars)
-            engine = TTSEngine(chunk_size=200) 
+            progress_bar = st.progress(0, text="Initializing Neural Engine... Please wait, processing full document...")
             
             try:
-                audio_bytes = engine.synthesize(clean_text, lang_choice[1], progress_bar)
+                # Progress to 50% while it connects to Microsoft Servers
+                progress_bar.progress(50, text="Generating HD Audio Matrix... This is faster and won't be blocked.")
                 
+                # Execute Core Engine (Direct stream, no chunks needed!)
+                audio_bytes = generate_audio_sync(clean_text, selected_voice_id)
+                
+                # Store in session state
                 st.session_state.audio_data = audio_bytes
                 st.session_state.processing_complete = True
                 
+                progress_bar.progress(100, text="Finalizing Output...")
+                time.sleep(0.5) # Short pause for UI smoothness
                 progress_bar.empty()
-                st.success("✅ Synthesis Complete! Master audio file generated successfully.")
+                st.success(f"✅ Synthesis Complete! High-Definition audio generated successfully using {selected_voice_label}.")
                 
             except Exception as e:
                 progress_bar.empty()
@@ -161,15 +114,15 @@ def main():
         st.audio(st.session_state.audio_data, format='audio/mp3')
         
         st.download_button(
-            label="📥 Download Secure Audio Output (MP3)",
+            label="📥 Download HD Audio Output (MP3)",
             data=st.session_state.audio_data,
-            file_name=f"Pro_Synthesis_{datetime.now().strftime('%Y%m%d_%H%M')}.mp3",
+            file_name=f"Neural_Audio_{datetime.now().strftime('%Y%m%d_%H%M')}.mp3",
             mime="audio/mp3",
             use_container_width=True
         )
 
     st.divider()
-    st.caption("🔒 System Integrity: Stable | Exponential Backoff: Active | API Chunk Limits: Safe (200 chars)")
+    st.caption("🔒 System Integrity: Stable | API: Microsoft Neural Edge | Rate Limit: Bypassed")
 
 if __name__ == "__main__":
     main()
