@@ -1,6 +1,7 @@
 import streamlit as st
 from gtts import gTTS
 import io
+from datetime import datetime
 
 # ==========================================
 # 1. ENTERPRISE APP CONFIGURATION
@@ -20,10 +21,6 @@ st.markdown("""
 # 2. EXPERT ENGINE: TEXT CHUNKING & MERGE LOGIC
 # ==========================================
 def split_text_into_chunks(text, chunk_size=2000):
-    """
-    Expert Method: Splits huge text safely at sentence/space boundaries 
-    to prevent Google TTS API rejection or truncation.
-    """
     words = text.split()
     chunks = []
     current_chunk = []
@@ -70,33 +67,29 @@ if st.button("🎧 Synthesize into Master Audio", use_container_width=True, type
     else:
         with st.spinner("⏳ Running Chunking Engine & Synthesizing Audio Matrix (Large data streams may take a few seconds)..."):
             try:
-                # Text ko safe limits mein split karna
                 text_chunks = split_text_into_chunks(clean_text)
                 combined_audio_buffer = io.BytesIO()
                 
-                # Processing each segment sequentially
                 for index, chunk in enumerate(text_chunks):
                     tts = gTTS(text=chunk, lang=lang_choice[1], slow=False)
                     chunk_buffer = io.BytesIO()
                     tts.write_to_fp(chunk_buffer)
                     chunk_buffer.seek(0)
-                    
-                    # Append chunk data to the main master buffer
                     combined_audio_buffer.write(chunk_buffer.read())
                 
-                # Reset buffer to start for standard playback
-                combined_audio_buffer.seek(0)
+                # 🎯 EXPERT FIX: Extract raw bytes directly to prevent stream reading conflicts
+                audio_data = combined_audio_buffer.getvalue()
                 
                 st.success(f"✅ Data Synthesis Complete! Successfully processed {len(text_chunks)} data matrix segments.")
                 
                 # Native Streamlit Player Deployment
-                st.audio(combined_audio_buffer, format='audio/mp3')
+                st.audio(audio_data, format='audio/mp3')
                 
                 # Secure Download Pathway
                 st.download_button(
                     label="📥 Download Master Audio File (MP3)",
-                    data=combined_audio_buffer,
-                    file_name=f"Synthesized_Roster_Audio_{datetime.now().strftime('%d%m%Y')}.mp3",
+                    data=audio_data,  # Direct raw bytes passed here
+                    file_name=f"Synthesized_Audio_{datetime.now().strftime('%d%m%Y')}.mp3",
                     mime="audio/mp3",
                     use_container_width=True
                 )
@@ -105,3 +98,4 @@ if st.button("🎧 Synthesize into Master Audio", use_container_width=True, type
 
 st.divider()
 st.caption("🔒 Architecture Status: Stabilized & Protected against Stream Overloads.")
+             
