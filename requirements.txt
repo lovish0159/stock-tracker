@@ -9,3 +9,4 @@ jinja2
 gTTS
 edge-tts
 asyncio
+PyPDF2
