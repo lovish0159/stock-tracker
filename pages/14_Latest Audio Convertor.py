@@ -101,22 +101,39 @@ def main():
                 progress_bar.empty()
                 st.error(f"❌ System Fault: {str(e)}")
 
-        # Secure Player & Download Section
+            # Secure Player & Download Section
     st.divider()
     if st.session_state.audio_data:
         st.markdown("### 🎧 Play & Save Audio")
         st.audio(st.session_state.audio_data, format='audio/mp3')
         
-        # 1. Standard Streamlit Button
+        # ==========================================
+        # 🔍 EXPERT DIAGNOSTIC TOOL
+        # ==========================================
+        st.markdown("### 🛠️ System Diagnostic Info")
+        
+        # Calculate precise file size in Megabytes (MB)
+        file_size_bytes = len(st.session_state.audio_data)
+        file_size_mb = file_size_bytes / (1024 * 1024)
+        
+        st.info(f"📊 **Actual Audio File Size:** {file_size_mb:.2f} MB")
+        
+        if file_size_mb > 1.5:
+            st.error("🚨 **Root Cause Found:** Aapki file 1.5 MB se badi hai! Mobile browsers itni badi file ko 'Force Download' (Base64) ya Streamlit ke default button se direct download hone se block kar dete hain.")
+            st.success("💡 **The ONLY Solution for Large Files on Mobile:** Upar diye gaye Black Audio Player ke right side mein **3-dots (⋮)** par click karein aur wahan se **'Download'** select karein. Yeh browser ka direct system hai, jo kabhi fail nahi hota!")
+        else:
+            st.warning("⚠️ File size safe limit mein hai. Agar phir bhi download nahi ho raha, toh iska matlab aap kisi App (WhatsApp/Telegram) ke internal browser mein hain. Kripya is link ko Chrome mein open karein.")
+        
+        # Standard Streamlit Button
         st.download_button(
-            label="📥 Save Audio File (MP3)",
+            label="📥 Save Audio File (Streamlit Native)",
             data=st.session_state.audio_data,
             file_name=f"AI_Audio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3",
             mime="audio/mp3",
             use_container_width=True
         )
         
-        # 2. EXPERT FIX: Force Download HTML Link (For Mobile Browsers)
+        # Force Download HTML Link
         import base64
         b64 = base64.b64encode(st.session_state.audio_data).decode()
         file_name = f"AI_Audio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
@@ -124,7 +141,7 @@ def main():
         <div style="text-align: center; margin-top: 15px;">
             <a href="data:audio/mp3;base64,{b64}" download="{file_name}" 
                style="display: inline-block; padding: 12px 24px; background-color: #16a34a; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; width: 100%; box-sizing: border-box;">
-               🚀 Force Download (If above button fails)
+               🚀 Force Download (Alternative)
             </a>
         </div>
         '''
