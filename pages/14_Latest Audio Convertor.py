@@ -101,12 +101,13 @@ def main():
                 progress_bar.empty()
                 st.error(f"❌ System Fault: {str(e)}")
 
-    # Secure Player & Download Section
+        # Secure Player & Download Section
     st.divider()
     if st.session_state.audio_data:
         st.markdown("### 🎧 Play & Save Audio")
         st.audio(st.session_state.audio_data, format='audio/mp3')
         
+        # 1. Standard Streamlit Button
         st.download_button(
             label="📥 Save Audio File (MP3)",
             data=st.session_state.audio_data,
@@ -114,7 +115,20 @@ def main():
             mime="audio/mp3",
             use_container_width=True
         )
+        
+        # 2. EXPERT FIX: Force Download HTML Link (For Mobile Browsers)
+        import base64
+        b64 = base64.b64encode(st.session_state.audio_data).decode()
+        file_name = f"AI_Audio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
+        href = f'''
+        <div style="text-align: center; margin-top: 15px;">
+            <a href="data:audio/mp3;base64,{b64}" download="{file_name}" 
+               style="display: inline-block; padding: 12px 24px; background-color: #16a34a; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; width: 100%; box-sizing: border-box;">
+               🚀 Force Download (If above button fails)
+            </a>
+        </div>
+        '''
+        st.markdown(href, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
-
