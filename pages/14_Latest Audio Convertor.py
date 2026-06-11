@@ -2,6 +2,7 @@ import streamlit as st
 import asyncio
 import edge_tts
 import re
+import os
 from datetime import datetime
 
 # ==========================================
@@ -20,7 +21,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. CORE AI NEURAL ENGINE
+# 2. CORE AI NEURAL ENGINE (Disk Saving)
 # ==========================================
 VOICE_MODELS = {
     "Hindi (Female - Swara HD)": "hi-IN-SwaraNeural",
@@ -37,34 +38,31 @@ def sanitize_text(text: str) -> str:
     text = re.sub(r'\s+', ' ', text)  
     return text.strip()
 
-async def synthesize_neural_audio(text: str, voice_name: str, speed: int) -> bytes:
-    """Streams unlimited text directly to audio buffer."""
+async def synthesize_and_save_audio(text: str, voice_name: str, speed: int, file_path: str):
+    """Streams unlimited text and directly writes it to a PHYSICAL file on the server."""
     speed_str = f"{speed:+d}%" 
     communicate = edge_tts.Communicate(text, voice_name, rate=speed_str)
-    audio_data = b""
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
-            audio_data += chunk["data"]
-    return audio_data
+    # 🎯 EXPERT FIX: Save physically to disk instead of memory chunking
+    await communicate.save(file_path)
 
-def generate_audio_sync(text: str, voice_name: str, speed: int) -> bytes:
+def generate_audio_sync(text: str, voice_name: str, speed: int, file_path: str):
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    return loop.run_until_complete(synthesize_neural_audio(text, voice_name, speed))
+    loop.run_until_complete(synthesize_and_save_audio(text, voice_name, speed, file_path))
 
 # ==========================================
 # 3. USER INTERFACE
 # ==========================================
 def main():
-    # Memory Setup
-    if "audio_data" not in st.session_state:
-        st.session_state.audio_data = None
+    # Session State
+    if "generated_file_path" not in st.session_state:
+        st.session_state.generated_file_path = None
         
     st.markdown("<div class='main-header'>⚡ Ultra AI Audio Engine</div>", unsafe_allow_html=True)
-    st.markdown("<div class='sub-header'>Unlimited Text | High-Speed AI | Zero Errors</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sub-header'>Physical Disk Storage | Zero Timeout Drops</div>", unsafe_allow_html=True)
 
     text_input = st.text_area("📝 Paste Unlimited Text Here:", height=250, placeholder="Type or paste any amount of text here...")
 
@@ -83,17 +81,23 @@ def main():
         if not clean_text:
             st.error("⚠️ Error: Please enter some text first.")
         else:
-            st.session_state.audio_data = None
+            st.session_state.generated_file_path = None
             progress_bar = st.progress(0, text="⚡ Establishing AI Connection...")
             
             try:
-                progress_bar.progress(50, text="Processing Unlimited Text at High Speed...")
+                progress_bar.progress(50, text="Writing audio directly to server Hard Drive...")
                 
-                # Execute Core Engine
-                audio_bytes = generate_audio_sync(clean_text, selected_voice_id, speech_speed)
-                st.session_state.audio_data = audio_bytes
+                # Create a physical file path
+                current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
+                temp_file_name = f"Audio_{current_time}.mp3"
                 
-                progress_bar.progress(100, text="✅ Audio Successfully Generated!")
+                # Execute Core Engine to save directly to disk
+                generate_audio_sync(clean_text, selected_voice_id, speech_speed, temp_file_name)
+                
+                # Store the file path in state
+                st.session_state.generated_file_path = temp_file_name
+                
+                progress_bar.progress(100, text="✅ Audio Successfully Written to Disk!")
                 st.success("🎉 Conversion Complete! Ready to Play and Download.")
                 progress_bar.empty()
                 
@@ -101,51 +105,26 @@ def main():
                 progress_bar.empty()
                 st.error(f"❌ System Fault: {str(e)}")
 
-            # Secure Player & Download Section
+    # Secure Player & Download Section
     st.divider()
-    if st.session_state.audio_data:
+    if st.session_state.generated_file_path and os.path.exists(st.session_state.generated_file_path):
         st.markdown("### 🎧 Play & Save Audio")
-        st.audio(st.session_state.audio_data, format='audio/mp3')
         
-        # ==========================================
-        # 🔍 EXPERT DIAGNOSTIC TOOL
-        # ==========================================
-        st.markdown("### 🛠️ System Diagnostic Info")
-        
-        # Calculate precise file size in Megabytes (MB)
-        file_size_bytes = len(st.session_state.audio_data)
-        file_size_mb = file_size_bytes / (1024 * 1024)
-        
-        st.info(f"📊 **Actual Audio File Size:** {file_size_mb:.2f} MB")
-        
-        if file_size_mb > 1.5:
-            st.error("🚨 **Root Cause Found:** Aapki file 1.5 MB se badi hai! Mobile browsers itni badi file ko 'Force Download' (Base64) ya Streamlit ke default button se direct download hone se block kar dete hain.")
-            st.success("💡 **The ONLY Solution for Large Files on Mobile:** Upar diye gaye Black Audio Player ke right side mein **3-dots (⋮)** par click karein aur wahan se **'Download'** select karein. Yeh browser ka direct system hai, jo kabhi fail nahi hota!")
-        else:
-            st.warning("⚠️ File size safe limit mein hai. Agar phir bhi download nahi ho raha, toh iska matlab aap kisi App (WhatsApp/Telegram) ke internal browser mein hain. Kripya is link ko Chrome mein open karein.")
-        
-        # Standard Streamlit Button
-        st.download_button(
-            label="📥 Save Audio File (Streamlit Native)",
-            data=st.session_state.audio_data,
-            file_name=f"AI_Audio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3",
-            mime="audio/mp3",
-            use_container_width=True
-        )
-        
-        # Force Download HTML Link
-        import base64
-        b64 = base64.b64encode(st.session_state.audio_data).decode()
-        file_name = f"AI_Audio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
-        href = f'''
-        <div style="text-align: center; margin-top: 15px;">
-            <a href="data:audio/mp3;base64,{b64}" download="{file_name}" 
-               style="display: inline-block; padding: 12px 24px; background-color: #16a34a; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; width: 100%; box-sizing: border-box;">
-               🚀 Force Download (Alternative)
-            </a>
-        </div>
-        '''
-        st.markdown(href, unsafe_allow_html=True)
+        # Open the physical file for reading
+        with open(st.session_state.generated_file_path, "rb") as file_handle:
+            # Play from physical file
+            st.audio(file_handle, format='audio/mp3')
+            
+            # Download directly from physical file handler (prevents mobile timeouts)
+            st.download_button(
+                label="📥 Download Secure Audio File (MP3)",
+                data=file_handle,
+                file_name=st.session_state.generated_file_path,
+                mime="audio/mp3",
+                use_container_width=True
+            )
+            
+        st.info("💡 **Pro Tip:** Agar upar wala Red Button fail ho, tabhi Black Player ke **3-dots (⋮)** se download karein. File disk par hai, isliye ab connection failed nahi hoga.")
 
 if __name__ == "__main__":
     main()
