@@ -10,3 +10,4 @@ gTTS
 edge-tts
 asyncio
 PyPDF2
+st-gsheets-connection
