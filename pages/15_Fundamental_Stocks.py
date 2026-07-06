@@ -11,7 +11,7 @@ st.title("📈 Custom Stock Screener for Intraday & Swing")
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1BHnQm0nYwl3paJ9PUEfHPlzMBLLXdpCZtdC59SFma58/edit?gid=0#gid=0" 
 
 try:
-    if SHEET_URL == "https://docs.google.com/spreadsheets/d/1BHnQm0nYwl3paJ9PUEfHPlzMBLLXdpCZtdC59SFma58/edit?gid=0#gid=0":
+    if SHEET_URL == "Yah apni sheet ka link dale":
         st.warning("⚠️ Kripya code mein line number 10 par apna Google Sheet link daalein.")
     else:
         # Streamlit ka official Google Sheets connection
