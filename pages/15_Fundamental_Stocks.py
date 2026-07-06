@@ -7,28 +7,29 @@ from streamlit_gsheets import GSheetsConnection
 st.set_page_config(page_title="Intraday & Fundamental Screener", layout="wide")
 st.title("📈 Custom Stock Screener for Intraday & Swing")
 
-# Google Sheet Link Input
-sheet_url = st.text_input("Apni Google Sheet ka Link yahan paste karein:")
+# 🔗 YAHAN APNI GOOGLE SHEET KA LINK HAMESHA KE LIYE SET KAREIN
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1BHnQm0nYwl3paJ9PUEfHPlzMBLLXdpCZtdC59SFma58/edit?gid=0#gid=0" 
 
-if sheet_url:
-    try:
-        # Streamlit ka official aur secure Google Sheets connection
+try:
+    if SHEET_URL == "https://docs.google.com/spreadsheets/d/1BHnQm0nYwl3paJ9PUEfHPlzMBLLXdpCZtdC59SFma58/edit?gid=0#gid=0":
+        st.warning("⚠️ Kripya code mein line number 10 par apna Google Sheet link daalein.")
+    else:
+        # Streamlit ka official Google Sheets connection
         conn = st.connection("gsheets", type=GSheetsConnection)
         
-        # Access token ka use karke private sheet read karna
-        df = conn.read(spreadsheet=sheet_url)
+        # Automatic sheet read karna (bina user se mange)
+        with st.spinner("Sheet connect ki ja rahi hai..."):
+            df = conn.read(spreadsheet=SHEET_URL)
         
         if 'Symbol' not in df.columns:
             st.error("❌ Aapki Google Sheet mein 'Symbol' naam ka column hona zaroori hai!")
         else:
-            st.success("✅ Secure Sheet successfully connect ho gayi!")
+            st.success("✅ Live Market Data Connected!")
             
             stock_data = []
             
-            with st.spinner("Market data fetch kiya ja raha hai..."):
-                # Har stock (jaise HAL.NS, BEL.NS, ya ASALCBR.BO) ka data nikalna
+            with st.spinner("Market se live price fetch kiya ja raha hai..."):
                 for symbol in df['Symbol']:
-                    # Khali ya invalid entry ko ignore karna
                     if pd.isna(symbol) or str(symbol).strip() == '':
                         continue
                         
@@ -38,7 +39,7 @@ if sheet_url:
                         
                         current_price = info.get('currentPrice', info.get('regularMarketPrice', 0))
                         prev_close = info.get('previousClose', 1)
-                        intraday_change = ((current_price - prev_close) / prev_close) * 100
+                        intraday_change = ((current_price - prev_close) / prev_close) * 100 if prev_close else 0
                         
                         stock_data.append({
                             "Stock": str(symbol).replace('.NS', '').replace('.BO', ''),
@@ -75,7 +76,5 @@ if sheet_url:
                 
                 st.info("💡 **Trading Tip:** P/E aur Debt/Equity aapko long-term aur swing mein madad karenge, par intraday ke liye sabse upar dikhne wale (High Volume + Positive Change) stocks par nazar rakhein.")
                 
-    except Exception as e:
-        st.error(f"❌ Connection Error: {e}. Kripya check karein ki Streamlit Secrets mein access token sahi se configure hai.")
-else:
-    st.info("👆 Upar apni Google Sheet ka link daalein analysis shuru karne ke liye.")
+except Exception as e:
+    st.error(f"❌ Connection Error: {e}. Agar 401 Unauthorized aa raha hai, toh ensure karein ki sheet 'Anyone with the link' par set hai.")
