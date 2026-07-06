@@ -9,7 +9,7 @@ st.markdown("Yeh app aapki Google Sheet se stocks pick karke unka analysis karti
 
 # Google Sheet Link Input
 sheet_url = st.text_input(
-    "Apni Google Sheet ka CSV Link yahan paste karein:", 
+    "https://docs.google.com/spreadsheets/d/1BHnQm0nYwl3paJ9PUEfHPlzMBLLXdpCZtdC59SFma58/edit?gid=0#gid=0", 
     placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv"
 )
 
